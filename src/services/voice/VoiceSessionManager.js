@@ -50,7 +50,7 @@ class VoiceSessionManager {
     }
 
     try {
-      const result = await session.connect(voiceChannel);
+      const result = await this.connectWithRetry(session, voiceChannel, member.guild.id);
       return {
         ...result,
         channel: voiceChannel,
@@ -61,6 +61,30 @@ class VoiceSessionManager {
       this.sessions.delete(member.guild.id);
       session.cleanupConnection(false);
       throw error;
+    }
+  }
+
+  async connectWithRetry(session, voiceChannel, guildId) {
+    try {
+      return await session.connect(voiceChannel);
+    } catch (error) {
+      const shouldRetry =
+        error?.message?.includes('aborted') ||
+        error?.message?.includes('timed out') ||
+        error?.code === 'ABORT_ERR';
+
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      this.logger.warn('Voice-Join wird nach einem abgebrochenen Erstversuch einmal neu versucht.', {
+        error: error.message,
+        guildId
+      });
+
+      session.cleanupConnection(false);
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return session.connect(voiceChannel);
     }
   }
 

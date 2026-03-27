@@ -3,12 +3,10 @@ const fs = require('node:fs');
 const {
   AudioPlayerStatus,
   NoSubscriberBehavior,
-  StreamType,
   createAudioPlayer,
   createAudioResource
 } = require('@discordjs/voice');
 const ffmpegPath = require('ffmpeg-static');
-const prism = require('prism-media');
 
 class GuildAudioQueue {
   constructor(options) {
@@ -29,7 +27,29 @@ class GuildAudioQueue {
     });
 
     this.player.on(AudioPlayerStatus.Idle, () => {
+      this.logger.info('Audio-Player ist idle.', {
+        guildId: this.guildId,
+        queuedItems: this.queue.length
+      });
       void this.playNext();
+    });
+
+    this.player.on(AudioPlayerStatus.Playing, () => {
+      const metadata = this.player.state.resource?.metadata;
+      this.logger.info('Audio-Player spielt Sound ab.', {
+        filePath: metadata?.filePath,
+        guildId: this.guildId,
+        trigger: metadata?.triggerName
+      });
+    });
+
+    this.player.on(AudioPlayerStatus.Buffering, () => {
+      const metadata = this.player.state.resource?.metadata;
+      this.logger.info('Audio-Player puffert Sound.', {
+        filePath: metadata?.filePath,
+        guildId: this.guildId,
+        trigger: metadata?.triggerName
+      });
     });
 
     this.player.on('error', (error) => {
@@ -42,6 +62,10 @@ class GuildAudioQueue {
   }
 
   attachConnection(connection) {
+    this.logger.info('Audio-Player wird mit Voice-Verbindung verbunden.', {
+      guildId: this.guildId,
+      status: connection.state.status
+    });
     connection.subscribe(this.player);
   }
 
@@ -51,6 +75,12 @@ class GuildAudioQueue {
     }
 
     this.queue.push(item);
+    this.logger.info('Sound wurde in die Audio-Queue gelegt.', {
+      filePath: item.filePath,
+      guildId: this.guildId,
+      queueLength: this.queue.length,
+      trigger: item.triggerName
+    });
 
     if (this.player.state.status === AudioPlayerStatus.Idle) {
       void this.playNext();
@@ -70,8 +100,14 @@ class GuildAudioQueue {
         return;
       }
 
+      this.logger.info('Audio-Queue startet den naechsten Sound.', {
+        exists: fs.existsSync(nextItem.filePath),
+        filePath: nextItem.filePath,
+        guildId: this.guildId,
+        trigger: nextItem.triggerName
+      });
       this.player.play(this.createResource(nextItem));
-      this.logger.debug('Audio-Queue spielt den naechsten Sound ab.', {
+      this.logger.info('Audio-Queue hat den Player gestartet.', {
         guildId: this.guildId,
         trigger: nextItem.triggerName,
         remainingItems: this.queue.length
@@ -99,26 +135,7 @@ class GuildAudioQueue {
       throw new Error(`Audiodatei wurde nicht gefunden: ${item.filePath || 'unbekannt'}`);
     }
 
-    const transcoder = new prism.FFmpeg({
-      args: [
-        '-analyzeduration',
-        '0',
-        '-loglevel',
-        '0',
-        '-i',
-        item.filePath,
-        '-f',
-        's16le',
-        '-ar',
-        '48000',
-        '-ac',
-        '2',
-        'pipe:1'
-      ]
-    });
-
-    return createAudioResource(transcoder, {
-      inputType: StreamType.Raw,
+    return createAudioResource(item.filePath, {
       metadata: item
     });
   }

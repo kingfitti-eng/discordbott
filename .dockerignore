@@ -1,0 +1,8 @@
+node_modules
+.env
+.git
+data
+uploads
+vosk-model-de-0.21
+temp-test.raw
+*.log

@@ -1,92 +1,72 @@
 # Discord Voice Trigger Bot
 
-Ein modularer Discord-Bot mit `discord.js`, Prefix-Commands (`!join`, `!leave`), Slash-Commands (`/add`, `/list`, `/remove`), lokaler Persistenz und vorbereiteter Speech-Service-Abstraktion fuer automatische Trigger in Voice-Channels.
+Ein modularer Discord-Bot mit `discord.js`, Prefix-Commands (`!join`, `!leave`), Slash-Commands (`/add`, `/list`, `/remove`), Trigger-Persistenz pro Guild und kostenloser Sprach-Erkennung fuer deutsche Triggerwoerter.
 
-## Was sofort funktioniert
+Diese Version ist jetzt auf einen AWS-tauglichen Betrieb ausgelegt:
 
-- `!join` laesst den Bot dem Voice-Channel des Users beitreten.
-- `!leave` trennt die Voice-Verbindung wieder.
-- `/add` speichert ein Triggerwort plus Audiodatei lokal.
-- `/list` zeigt alle Trigger fuer eine Guild.
-- `/remove` entfernt Trigger wieder sauber inklusive Datei.
-- Sounds werden pro Guild ueber eine Queue nacheinander abgespielt, damit sich nichts ueberlappt.
-- Triggerdaten werden persistent in `data/triggers.json` abgelegt.
+- dauerhafte Bot-Laufzeit statt kurzlebigem Webhook-Style
+- optionaler HTTP-Healthcheck fuer Container/Load-Balancer
+- kostenloser lokaler Speech-Stack ueber `faster-whisper`
+- Audio-Uploads werden beim Speichern in sauberes `wav` normalisiert
 
-## Architektur
+## Was jetzt funktioniert
 
-```text
-src/
-  index.js
-  config/
-    env.js
-  commands/
-    prefix/
-      join.js
-      leave.js
-    slash/
-      add.js
-      list.js
-      remove.js
-  events/
-    interactionCreate.js
-    messageCreate.js
-    ready.js
-  services/
-    audio/
-      GuildAudioQueue.js
-    speech/
-      BaseSpeechRecognitionService.js
-      NullSpeechRecognitionService.js
-      SpeechServiceFactory.js
-      VoskSpeechRecognitionService.js
-    storage/
-      JsonStorageAdapter.js
-      StorageAdapter.js
-    triggers/
-      TriggerRepository.js
-      TriggerService.js
-    voice/
-      GuildVoiceSession.js
-      VoiceSessionManager.js
-  utils/
-    fileStorage.js
-    fileValidation.js
-    filesystem.js
-    loaders.js
-    logger.js
-    sanitize.js
-  scripts/
-    register-commands.js
-data/
-uploads/
-```
+- `!join` laesst den Bot dem Voice-Channel des Users beitreten
+- `!leave` trennt die Voice-Verbindung wieder
+- `/add` speichert Triggerwort plus Audiodatei lokal
+- `/list` zeigt alle Trigger pro Guild
+- `/remove` entfernt Trigger sauber
+- Sounds werden pro Guild ueber eine Queue nacheinander abgespielt
+- Sprache wird abschnittsweise erkannt und gegen Triggerwoerter gematcht
+- Trigger koennen ueber sehr lange Calls laufen, weil nur kurze Sprachschnipsel verarbeitet werden statt ganze Calls zu puffern
 
-## Tech-Stack und warum
+## Beste kostenlose Speech-Loesung fuer deinen Fall
 
-- `discord.js`: Standardbibliothek fuer Discord-Bots mit guter Slash-Command-Unterstuetzung.
-- `@discordjs/voice`: Offizielle Voice-Erweiterung fuer Join, Playback und Audio-Receive.
-- `prism-media`: Audio-Decoding fuer Discord-Voice und FFmpeg-Pipelines.
-- `ffmpeg-static`: Bringt ein FFmpeg-Binary fuer lokales Audio-Transcoding mit, damit `mp3`, `wav` und `ogg` realistisch abgespielt werden koennen.
-- `dotenv`: Liest Konfiguration aus `.env`.
-- `vosk` als `optionalDependency`: Kostenlose lokale Speech-to-Text-Option ohne API-Key. Optional, weil Installation und Modell-Download je nach Plattform aufwendiger sein koennen.
+Fuer deinen Bot ist `faster-whisper` die robusteste kostenlose Option:
+
+- kostenlos und lokal betreibbar
+- in der Praxis stabiler und oft genauer als `whisper.cpp` bei laengerem Dauerbetrieb
+- auf AWS CPU-Instanzen gut nutzbar
+- deutsche Sprache wird gut erkannt
+
+Wichtiger Realismus:
+
+- komplett kostenlos ist die Speech-Engine, aber AWS-Compute selbst ist normalerweise nicht dauerhaft gratis
+- fuer CPU-only auf AWS ist `small` der sinnvollste Start
+- wenn du spaeter eine staerkere Instanz nutzt, kannst du auf `medium` hochgehen
+
+## AWS-Empfehlung
+
+Fuer einen Discord-Voice-Bot ist eine normale AWS-`Web Service`-Denke nicht ideal. Du brauchst einen Prozess, der dauerhaft online bleibt und Voice/Gateway-Verbindungen offen haelt.
+
+Empfohlen:
+
+1. `EC2` mit Docker
+2. alternativ `ECS Service`
+
+Nicht meine erste Wahl:
+
+- App Runner
+- Lambda
 
 ## Voraussetzungen
 
-- Node.js `20.11+`
-- Ein Discord-Bot im [Discord Developer Portal](https://discord.com/developers/applications)
-- Fuer automatische Speech-Erkennung optional:
-  - installierbares `vosk`-Paket
-  - lokal heruntergeladenes Vosk-Sprachmodell
+- Node.js `22.12+`
+- Python `3.10+`
+- `ffmpeg`
+- Discord Bot im Developer Portal
+- AWS-Host mit dauerhaft laufendem Prozess, wenn du online hosten willst
 
-## Setup
+## Lokales Setup
 
 1. Abhaengigkeiten installieren:
 
 ```powershell
 npm.cmd install
+pip install -r requirements.txt
 ```
 
-2. Umgebungsvariablen anlegen:
+2. Env-Datei anlegen:
 
 ```powershell
 Copy-Item .env.example .env
@@ -97,13 +77,22 @@ Copy-Item .env.example .env
 ```env
 APPLICATION_ID=deine_application_id
 DISCORD_TOKEN=dein_bot_token
-GUILD_ID=optional_fuer_schnelle_guild_registrierung
-SOUND_CHANNEL_ID=optional_fester_sound_channel
-SUPABASE_KEY=optional
-SUPABASE_URL=optional
-PREFIX=!
-SPEECH_PROVIDER=none
-VOSK_MODEL_PATH=
+GUILD_ID=deine_test_guild_id
+
+SPEECH_PROVIDER=fasterwhisper
+PYTHON_BIN=python3
+FASTER_WHISPER_WORKER_PATH=./scripts/faster_whisper_worker.py
+FASTER_WHISPER_MODEL=small
+FASTER_WHISPER_LANGUAGE=de
+FASTER_WHISPER_DEVICE=cpu
+FASTER_WHISPER_COMPUTE_TYPE=int8
+FASTER_WHISPER_BEAM_SIZE=1
+FASTER_WHISPER_VAD_FILTER=true
+SPEECH_TRANSCRIPTION_TIMEOUT_MS=30000
+
+HTTP_ENABLED=true
+HOST=0.0.0.0
+PORT=3000
 ```
 
 4. Slash-Commands registrieren:
@@ -118,21 +107,93 @@ npm.cmd run register-commands
 npm.cmd start
 ```
 
+## Docker fuer AWS
+
+Dieses Repo hat jetzt ein `Dockerfile`.
+
+Build lokal:
+
+```powershell
+docker build -t discord-voice-trigger-bot .
+```
+
+Start lokal im Container:
+
+```powershell
+docker run --env-file .env -p 3000:3000 discord-voice-trigger-bot
+```
+
+Healthcheck:
+
+- `GET /health`
+- `GET /`
+
+Beispielantwort:
+
+```json
+{
+  "ok": true,
+  "speech": {
+    "enabled": true,
+    "provider": "fasterwhisper",
+    "reason": "faster-whisper aktiv mit Modell small auf cpu/int8"
+  },
+  "uptimeSeconds": 42
+}
+```
+
+## AWS-Deployment kurz und realistisch
+
+Wenn du AWS schon nutzt, ist das der sinnvollste Weg:
+
+1. Docker-Image bauen
+2. nach ECR pushen
+3. auf EC2 oder ECS als dauerhaft laufenden Service starten
+4. `.env` als AWS-Umgebungsvariablen oder aus Secrets Manager setzen
+5. `uploads` und `data` auf persistentem Volume oder spaeter S3/Postgres auslagern
+
+## Wichtige Env-Variablen
+
+Pflicht:
+
+- `DISCORD_TOKEN`
+- `APPLICATION_ID`
+- `SPEECH_PROVIDER`
+
+Fuer `faster-whisper`:
+
+- `PYTHON_BIN`
+- `FASTER_WHISPER_WORKER_PATH`
+- `FASTER_WHISPER_MODEL`
+- `FASTER_WHISPER_LANGUAGE`
+- `FASTER_WHISPER_DEVICE`
+- `FASTER_WHISPER_COMPUTE_TYPE`
+
+Optional:
+
+- `GUILD_ID`
+- `SOUND_CHANNEL_ID`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+
+## Trigger und Audio
+
+- Trigger werden in `data/triggers.json` gespeichert
+- Audiodateien werden in `uploads/` gespeichert
+- neue Uploads werden automatisch in ein sauberes `wav` fuer stabiles Playback umgewandelt
+
 ## Discord Developer Portal
 
-Aktiviere unter `Bot` diese Einstellungen:
+Aktiviere unter `Bot`:
 
 - `MESSAGE CONTENT INTENT`
-- `SERVER MEMBERS INTENT` ist fuer diesen MVP nicht zwingend noetig, kann aber spaeter hilfreich sein
 
-Noetige Gateway Intents im Code:
+Scopes fuer den Invite:
 
-- `Guilds`
-- `GuildMessages`
-- `MessageContent`
-- `GuildVoiceStates`
+- `bot`
+- `applications.commands`
 
-Empfohlene Bot-Berechtigungen:
+Empfohlene Berechtigungen:
 
 - `View Channels`
 - `Send Messages`
@@ -140,108 +201,24 @@ Empfohlene Bot-Berechtigungen:
 - `Connect`
 - `Speak`
 - `Use Voice Activity`
-- `Attach Files` ist fuer den Bot selbst nicht noetig, nur fuer User bei `/add`
-
-## Verwendung
-
-- `!join`
-  - Der Bot joint den Voice-Channel des Users.
-  - Wenn der Bot schon in einem anderen Channel ist, wechselt er dorthin.
-- `!leave`
-  - Der Bot verlaesst den Voice-Channel der Guild.
-- `/add name:<trigger> file:<audio>`
-  - Speichert einen Trigger fuer die aktuelle Guild.
-- `/list`
-  - Listet alle Trigger auf.
-- `/remove name:<trigger>`
-  - Entfernt einen Trigger.
-
-## Persistenz und Erweiterbarkeit
-
-- Trigger-Metadaten enthalten:
-  - `id`
-  - `guildId`
-  - `name`
-  - `originalName`
-  - `fileName`
-  - `filePath`
-  - `mimeType`
-  - `originalFileName`
-  - `size`
-  - `createdAt`
-  - `createdBy`
-- Persistenz laeuft aktuell ueber JSON.
-- Der Wechsel auf SQLite oder PostgreSQL ist spaeter sauber moeglich, weil `TriggerRepository` bereits ueber eine Storage-Schicht arbeitet.
-
-## Speech-Erkennung
-
-### Aktueller MVP
-
-Die Architektur fuer Live-Trigger im Voice-Call ist enthalten:
-
-- Audio-Receive pro sprechendem User
-- PCM-Decoding
-- Speech-Service-Abstraktion
-- Trigger-Matching pro Guild
-- Audio-Queue pro Guild
-
-### Kostenlose praktikable Option
-
-`Vosk` ist die realistischste kostenlose lokale Option fuer einen MVP ohne API-Key:
-
-1. Vosk-Modell lokal herunterladen
-2. `SPEECH_PROVIDER=vosk` setzen
-3. `VOSK_MODEL_PATH` auf das Modell zeigen lassen
-4. Bot neu starten
-
-Wenn Vosk nicht verfuegbar ist, faellt der Bot sauber auf `SPEECH_PROVIDER=none` zurueck. Dann funktionieren Join, Leave, Trigger-Verwaltung und Playback weiterhin, aber keine automatische Spracherkennung.
-
-Wenn die optionale `vosk`-Installation auf deinem System fehlschlaegt, ist das fuer den Start kein Blocker. Lass `SPEECH_PROVIDER=none` gesetzt und nimm Vosk erst spaeter dazu.
-
-## Deployment
-
-Kostenlos oder guenstig moeglich auf:
-
-- lokal auf einem eigenen PC oder Mini-PC
-- Railway, wenn Voice und optionale native Dependencies in dein Budget passen
-- VPS mit Node.js, falls du dauerhaft stabile Voice-Sessions willst
-
-Fuer einen kostenlosen Start ist lokal oder ein kleiner Heimserver oft realistischer als serverlose Plattformen, weil Discord-Voice und kontinuierliches Audio-Processing keine gute Passung fuer klassische Free-Tier-Functions sind.
 
 ## Realistische Grenzen
 
-- Discord-Voice empfangen und lokal in Speech-to-Text umwandeln ist technisch moeglich, aber deutlich fragiler als reines Sound-Playback.
-- Komplett kostenlose Live-Spracherkennung ohne Cloud-API ist CPU-lastig und haengt stark von Audioqualitaet, Sprache, Dialekt und Hintergrundgeraeuschen ab.
-- `vosk` ist fuer einen MVP ehrlich sinnvoll, aber nicht so treffsicher wie moderne kostenpflichtige Cloud-Modelle oder lokal optimierte Whisper-Setups.
-- Exakte Echtzeit-Reaktion in jeder Situation ist nicht garantiert, weil Discord-Receive, Paketverluste, Silence-Ende und Modellqualitaet Grenzen setzen.
-- Wenn du spaeter maximale Zuverlaessigkeit willst, ist die beste Erweiterung ein austauschbarer externer STT-Service oder ein staerkeres lokales Modell.
+- Voice-Empfang und STT fuer viele gleichzeitige Sprecher kostet CPU
+- `small` ist auf AWS CPU meist der beste Start
+- `medium` ist genauer, aber schwerer
+- fuer extrem laute oder ueberlappende Gespraeche bleibt Speech-to-Text fehleranfaellig
+- es wird abschnittsweise nach kurzer Stille transkribiert, nicht als perfekte Wort-fuer-Wort-Livestream-Engine
 
 ## Was ich jetzt von dir brauche
 
-Pflicht:
-
-- Discord-Account
-- Discord-Anwendung plus Bot im Developer Portal
 - `DISCORD_TOKEN`
 - `APPLICATION_ID`
-- mindestens einen Test-Server, in den du den Bot einlaedst
+- optional `GUILD_ID`
+- Entscheidung: `EC2` oder `ECS`
+- wenn du AWS direkt willst: ECR/EC2 oder ECS-Zugang
 
-Empfohlen fuer schnellere Entwicklung:
+Wenn du willst, ist der naechste Schritt:
 
-- `GUILD_ID`, damit Slash-Commands sofort in einer Test-Guild registriert werden
-
-Optional:
-
-- `SOUND_CHANNEL_ID`
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- ein lokales Vosk-Modell
-- `VOSK_MODEL_PATH`
-- spaeter Hosting-Ziel
-- spaeter echte Datenbank statt JSON
-
-Erst spaeter noetig:
-
-- API-Key fuer externes Speech-to-Text
-- PostgreSQL- oder andere Datenbank-Zugaenge
-- erweitertes Monitoring oder Log-Aggregation
+1. ich richte dir die `.env` fuer AWS sauber ein
+2. danach gebe ich dir die exakten Docker- und AWS-Befehle fuer dein Setup
