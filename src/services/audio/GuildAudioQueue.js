@@ -43,6 +43,15 @@ class GuildAudioQueue {
       });
     });
 
+    this.player.on(AudioPlayerStatus.Paused, () => {
+      const metadata = this.player.state.resource?.metadata;
+      this.logger.info('Audio-Player wurde pausiert.', {
+        filePath: metadata?.filePath,
+        guildId: this.guildId,
+        trigger: metadata?.triggerName
+      });
+    });
+
     this.player.on(AudioPlayerStatus.Buffering, () => {
       const metadata = this.player.state.resource?.metadata;
       this.logger.info('Audio-Player puffert Sound.', {
@@ -145,8 +154,64 @@ class GuildAudioQueue {
   }
 
   stop() {
+    const hadAudio = this.queue.length > 0 || this.player.state.status !== AudioPlayerStatus.Idle;
     this.clear();
     this.player.stop(true);
+
+    if (hadAudio) {
+      this.logger.info('Audio-Player wurde gestoppt und die Queue geleert.', {
+        guildId: this.guildId
+      });
+    }
+
+    return {
+      code: hadAudio ? 'STOPPED' : 'NOT_PLAYING',
+      ok: hadAudio
+    };
+  }
+
+  pause() {
+    const isActivePlayback =
+      this.player.state.status === AudioPlayerStatus.Playing ||
+      this.player.state.status === AudioPlayerStatus.Buffering;
+
+    if (!isActivePlayback) {
+      return {
+        code: 'NOT_PLAYING',
+        ok: false
+      };
+    }
+
+    const paused = this.player.pause(true);
+    return {
+      code: paused ? 'PAUSED' : 'NOT_PLAYING',
+      ok: paused
+    };
+  }
+
+  resume() {
+    const isPausedPlayback =
+      this.player.state.status === AudioPlayerStatus.Paused ||
+      this.player.state.status === AudioPlayerStatus.AutoPaused;
+
+    if (!isPausedPlayback) {
+      return {
+        code: 'NOT_PAUSED',
+        ok: false
+      };
+    }
+
+    const resumed = this.player.unpause();
+    if (resumed) {
+      this.logger.info('Audio-Player wird fortgesetzt.', {
+        guildId: this.guildId
+      });
+    }
+
+    return {
+      code: resumed ? 'RESUMED' : 'NOT_PAUSED',
+      ok: resumed
+    };
   }
 }
 

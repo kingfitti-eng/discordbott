@@ -30,8 +30,10 @@ class GuildVoiceSession {
       maxQueueSize: options.maxQueueSize
     });
     this.activeCaptures = new Set();
+    this.isProcessingTranscriptionQueue = false;
     this.lastTriggerTimes = new Map();
     this.speakingHandler = null;
+    this.transcriptionQueue = [];
   }
 
   async connect(channel) {
@@ -214,12 +216,19 @@ class GuildVoiceSession {
         userId
       });
 
-      const transcriptResult = await this.speechService.transcribePcm(Buffer.concat(chunks), {
-        channels: 2,
-        guildId: this.guildId,
-        sampleRate: 48_000,
-        userId
-      });
+      const transcriptResult = await this.enqueueTranscriptionTask(
+        () =>
+          this.speechService.transcribePcm(Buffer.concat(chunks), {
+            channels: 2,
+            guildId: this.guildId,
+            sampleRate: 48_000,
+            userId
+          }),
+        {
+          bufferBytes: totalBytes,
+          userId
+        }
+      );
 
       if (!transcriptResult?.text) {
         this.logger.info('Keine erkennbare Sprache im Ausschnitt gefunden.', {
@@ -296,6 +305,65 @@ class GuildVoiceSession {
     }
   }
 
+  async enqueueTranscriptionTask(task, metadata) {
+    return new Promise((resolve, reject) => {
+      this.transcriptionQueue.push({
+        metadata,
+        reject,
+        resolve,
+        task
+      });
+
+      if (this.transcriptionQueue.length > 1) {
+        this.logger.info('Speech-Transkription wurde in die Warteschlange gestellt.', {
+          guildId: this.guildId,
+          queuedJobs: this.transcriptionQueue.length,
+          userId: metadata?.userId
+        });
+      }
+
+      void this.processTranscriptionQueue();
+    });
+  }
+
+  async processTranscriptionQueue() {
+    if (this.isProcessingTranscriptionQueue) {
+      return;
+    }
+
+    this.isProcessingTranscriptionQueue = true;
+
+    try {
+      while (this.transcriptionQueue.length > 0) {
+        const nextJob = this.transcriptionQueue.shift();
+        if (!nextJob) {
+          continue;
+        }
+
+        try {
+          const result = await nextJob.task();
+          nextJob.resolve(result);
+        } catch (error) {
+          nextJob.reject(error);
+        }
+      }
+    } finally {
+      this.isProcessingTranscriptionQueue = false;
+    }
+  }
+
+  pausePlayback() {
+    return this.audioQueue.pause();
+  }
+
+  resumePlayback() {
+    return this.audioQueue.resume();
+  }
+
+  stopPlayback() {
+    return this.audioQueue.stop();
+  }
+
   async destroy(reason = 'manual') {
     this.logger.info('Voice-Session wird beendet.', {
       guildId: this.guildId,
@@ -315,6 +383,11 @@ class GuildVoiceSession {
     this.audioQueue.stop();
     this.activeCaptures.clear();
     this.lastTriggerTimes.clear();
+
+    while (this.transcriptionQueue.length > 0) {
+      const pendingJob = this.transcriptionQueue.shift();
+      pendingJob?.reject?.(new Error('Voice-Session wurde beendet.'));
+    }
 
     if (activeConnection) {
       activeConnection.removeAllListeners('error');

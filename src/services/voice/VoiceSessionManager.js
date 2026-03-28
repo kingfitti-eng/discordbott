@@ -103,6 +103,42 @@ class VoiceSessionManager {
     };
   }
 
+  pauseGuildPlayback(guildId) {
+    const session = this.sessions.get(guildId);
+    if (!session) {
+      return {
+        ok: false,
+        code: 'NOT_CONNECTED'
+      };
+    }
+
+    return session.pausePlayback();
+  }
+
+  resumeGuildPlayback(guildId) {
+    const session = this.sessions.get(guildId);
+    if (!session) {
+      return {
+        ok: false,
+        code: 'NOT_CONNECTED'
+      };
+    }
+
+    return session.resumePlayback();
+  }
+
+  stopGuildPlayback(guildId) {
+    const session = this.sessions.get(guildId);
+    if (!session) {
+      return {
+        ok: false,
+        code: 'NOT_CONNECTED'
+      };
+    }
+
+    return session.stopPlayback();
+  }
+
   async destroyAll() {
     const sessions = Array.from(this.sessions.values());
     await Promise.all(sessions.map((session) => session.destroy('shutdown')));
