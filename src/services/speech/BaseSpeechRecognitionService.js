@@ -15,6 +15,8 @@ class BaseSpeechRecognitionService {
     return null;
   }
 
+  async warmup() {}
+
   async close() {}
 }
 

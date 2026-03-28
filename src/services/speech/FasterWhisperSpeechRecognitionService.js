@@ -109,6 +109,10 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
       });
 
       const worker = spawn(this.pythonBin, args, {
+        env: {
+          ...process.env,
+          OMP_NUM_THREADS: String(this.cpuThreads)
+        },
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true
       });
@@ -281,6 +285,25 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
       this.worker.kill();
     } finally {
       this.worker = null;
+    }
+  }
+
+  async warmup() {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    try {
+      await this.ensureWorker();
+      this.logger.info('faster-whisper-Worker ist vorgewaermt.', {
+        cpuThreads: this.cpuThreads,
+        device: this.device,
+        model: this.model
+      });
+    } catch (error) {
+      this.logger.warn('faster-whisper-Warmup ist fehlgeschlagen.', {
+        error: error.message
+      });
     }
   }
 }

@@ -1,3 +1,4 @@
+const os = require('node:os');
 const path = require('node:path');
 const dotenv = require('dotenv');
 
@@ -32,6 +33,11 @@ function readFloat(name, fallback) {
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
 }
 
+function readPositiveInteger(name, fallback) {
+  const parsedValue = readInteger(name, fallback);
+  return parsedValue > 0 ? parsedValue : fallback;
+}
+
 function readBoolean(name, fallback) {
   const rawValue = process.env[name];
   if (!rawValue || !rawValue.trim()) {
@@ -58,6 +64,7 @@ function loadConfig(options = {}) {
   const rootDir = process.cwd();
   const requireToken = options.requireToken ?? true;
   const requireApplicationId = options.requireApplicationId ?? false;
+  const availableCpuThreads = Math.max(os.availableParallelism?.() || os.cpus().length || 1, 1);
 
   const dataDir = resolvePath(rootDir, process.env.DATA_DIR, 'data');
   const uploadsDir = resolvePath(rootDir, process.env.UPLOADS_DIR, 'uploads');
@@ -109,7 +116,7 @@ function loadConfig(options = {}) {
       fasterWhisperBeamSize: Math.max(readInteger('FASTER_WHISPER_BEAM_SIZE', 1), 1),
       fasterWhisperBestOf: Math.max(readInteger('FASTER_WHISPER_BEST_OF', 5), 1),
       fasterWhisperComputeType: process.env.FASTER_WHISPER_COMPUTE_TYPE?.trim() || 'int8',
-      fasterWhisperCpuThreads: Math.max(readInteger('FASTER_WHISPER_CPU_THREADS', 0), 0),
+      fasterWhisperCpuThreads: readPositiveInteger('FASTER_WHISPER_CPU_THREADS', availableCpuThreads),
       fasterWhisperDevice: process.env.FASTER_WHISPER_DEVICE?.trim() || 'cpu',
       fasterWhisperHotwordsEnabled: readBoolean('FASTER_WHISPER_HOTWORDS_ENABLED', true),
       fasterWhisperHotwordsMax: Math.max(readInteger('FASTER_WHISPER_HOTWORDS_MAX', 25), 1),
