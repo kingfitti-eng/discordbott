@@ -11,15 +11,22 @@ async function createSpeechRecognitionService(config, logger) {
     try {
       return new FasterWhisperSpeechRecognitionService({
         beamSize: config.fasterWhisperBeamSize,
+        bestOf: config.fasterWhisperBestOf,
         computeType: config.fasterWhisperComputeType,
+        cpuThreads: config.fasterWhisperCpuThreads,
         device: config.fasterWhisperDevice,
+        hotwordsEnabled: config.fasterWhisperHotwordsEnabled,
+        hotwordsMax: config.fasterWhisperHotwordsMax,
         language: config.fasterWhisperLanguage,
         logger,
         model: config.fasterWhisperModel,
+        numWorkers: config.fasterWhisperNumWorkers,
+        patience: config.fasterWhisperPatience,
         pythonBin: config.pythonBin,
         tempDir: config.tempDir,
         transcriptionTimeoutMs: config.transcriptionTimeoutMs,
         vadFilter: config.fasterWhisperVadFilter,
+        vadMinSilenceMs: config.fasterWhisperVadMinSilenceMs,
         workerPath: config.fasterWhisperWorkerPath
       });
     } catch (error) {

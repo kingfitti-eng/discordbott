@@ -216,11 +216,16 @@ class GuildVoiceSession {
         userId
       });
 
+      const hotwords = await this.triggerService.buildSpeechHotwords(this.guildId, {
+        maxCount: this.speechService.hotwordsMax || 25
+      });
+
       const transcriptResult = await this.enqueueTranscriptionTask(
         () =>
           this.speechService.transcribePcm(Buffer.concat(chunks), {
             channels: 2,
             guildId: this.guildId,
+            hotwords,
             sampleRate: 48_000,
             userId
           }),

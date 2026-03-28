@@ -126,6 +126,33 @@ class TriggerService {
       })
       .map((entry) => entry.trigger);
   }
+
+  async buildSpeechHotwords(guildId, options = {}) {
+    const maxCount = Math.max(options.maxCount || 25, 1);
+    const maxCharacters = Math.max(options.maxCharacters || 180, 40);
+    const triggers = await this.repository.listByGuild(guildId);
+    const uniqueNames = new Set();
+    const hotwords = [];
+    let totalCharacters = 0;
+
+    for (const trigger of triggers.sort((left, right) => right.name.length - left.name.length)) {
+      const candidate = normalizeTriggerName(trigger.originalName || trigger.name);
+      if (!candidate || uniqueNames.has(candidate)) {
+        continue;
+      }
+
+      const projectedLength = totalCharacters === 0 ? candidate.length : totalCharacters + 2 + candidate.length;
+      if (hotwords.length >= maxCount || projectedLength > maxCharacters) {
+        continue;
+      }
+
+      uniqueNames.add(candidate);
+      hotwords.push(candidate);
+      totalCharacters = projectedLength;
+    }
+
+    return hotwords.join(', ');
+  }
 }
 
 module.exports = {

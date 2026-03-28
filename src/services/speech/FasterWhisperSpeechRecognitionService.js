@@ -12,16 +12,23 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
   constructor(options) {
     super();
     this.beamSize = options.beamSize;
+    this.bestOf = options.bestOf;
     this.computeType = options.computeType;
+    this.cpuThreads = options.cpuThreads;
     this.device = options.device;
+    this.hotwordsEnabled = options.hotwordsEnabled;
+    this.hotwordsMax = options.hotwordsMax;
     this.language = options.language;
     this.logger = options.logger;
     this.model = options.model;
+    this.numWorkers = options.numWorkers;
+    this.patience = options.patience;
     this.pendingJobs = new Map();
     this.pythonBin = options.pythonBin;
     this.tempDir = options.tempDir;
     this.transcriptionTimeoutMs = options.transcriptionTimeoutMs;
     this.vadFilter = options.vadFilter;
+    this.vadMinSilenceMs = options.vadMinSilenceMs;
     this.worker = null;
     this.workerPath = options.workerPath;
     this.workerReadyPromise = null;
@@ -67,8 +74,18 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
         this.computeType,
         '--beam-size',
         String(this.beamSize),
+        '--best-of',
+        String(this.bestOf),
+        '--patience',
+        String(this.patience),
         '--vad-filter',
-        this.vadFilter ? 'true' : 'false'
+        this.vadFilter ? 'true' : 'false',
+        '--vad-min-silence-ms',
+        String(this.vadMinSilenceMs),
+        '--cpu-threads',
+        String(this.cpuThreads),
+        '--num-workers',
+        String(this.numWorkers)
       ];
 
       if (this.language) {
@@ -77,11 +94,17 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
 
       this.logger.info('faster-whisper-Worker wird gestartet.', {
         beamSize: this.beamSize,
+        bestOf: this.bestOf,
         computeType: this.computeType,
+        cpuThreads: this.cpuThreads,
         device: this.device,
+        hotwordsEnabled: this.hotwordsEnabled,
         language: this.language || 'auto',
         model: this.model,
+        numWorkers: this.numWorkers,
+        patience: this.patience,
         pythonBin: this.pythonBin,
+        vadMinSilenceMs: this.vadMinSilenceMs,
         workerPath: this.workerPath
       });
 
@@ -190,6 +213,7 @@ class FasterWhisperSpeechRecognitionService extends BaseSpeechRecognitionService
       await this.ensureWorker();
 
       const payload = await this.sendJob({
+        hotwords: this.hotwordsEnabled ? metadata.hotwords || '' : '',
         id: basename,
         language: this.language,
         wavPath

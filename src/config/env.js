@@ -22,6 +22,16 @@ function readInteger(name, fallback) {
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
 }
 
+function readFloat(name, fallback) {
+  const rawValue = process.env[name];
+  if (!rawValue || !rawValue.trim()) {
+    return fallback;
+  }
+
+  const parsedValue = Number.parseFloat(rawValue);
+  return Number.isFinite(parsedValue) ? parsedValue : fallback;
+}
+
 function readBoolean(name, fallback) {
   const rawValue = process.env[name];
   if (!rawValue || !rawValue.trim()) {
@@ -97,11 +107,18 @@ function loadConfig(options = {}) {
       provider: speechProvider,
       captureSilenceMs: Math.max(readInteger('SPEECH_CAPTURE_SILENCE_MS', 1200), 300),
       fasterWhisperBeamSize: Math.max(readInteger('FASTER_WHISPER_BEAM_SIZE', 1), 1),
+      fasterWhisperBestOf: Math.max(readInteger('FASTER_WHISPER_BEST_OF', 5), 1),
       fasterWhisperComputeType: process.env.FASTER_WHISPER_COMPUTE_TYPE?.trim() || 'int8',
+      fasterWhisperCpuThreads: Math.max(readInteger('FASTER_WHISPER_CPU_THREADS', 0), 0),
       fasterWhisperDevice: process.env.FASTER_WHISPER_DEVICE?.trim() || 'cpu',
+      fasterWhisperHotwordsEnabled: readBoolean('FASTER_WHISPER_HOTWORDS_ENABLED', true),
+      fasterWhisperHotwordsMax: Math.max(readInteger('FASTER_WHISPER_HOTWORDS_MAX', 25), 1),
       fasterWhisperLanguage: process.env.FASTER_WHISPER_LANGUAGE?.trim() || 'de',
       fasterWhisperModel: process.env.FASTER_WHISPER_MODEL?.trim() || 'small',
+      fasterWhisperNumWorkers: Math.max(readInteger('FASTER_WHISPER_NUM_WORKERS', 1), 1),
+      fasterWhisperPatience: Math.max(readFloat('FASTER_WHISPER_PATIENCE', 1.5), 1),
       fasterWhisperVadFilter: readBoolean('FASTER_WHISPER_VAD_FILTER', true),
+      fasterWhisperVadMinSilenceMs: Math.max(readInteger('FASTER_WHISPER_VAD_MIN_SILENCE_MS', 250), 50),
       fasterWhisperWorkerPath: resolvePath(rootDir, process.env.FASTER_WHISPER_WORKER_PATH, path.join('scripts', 'faster_whisper_worker.py')),
       pythonBin: process.env.PYTHON_BIN?.trim() || 'python3',
       transcriptionTimeoutMs: Math.max(readInteger('SPEECH_TRANSCRIPTION_TIMEOUT_MS', 30000), 5000),
