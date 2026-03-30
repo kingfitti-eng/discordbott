@@ -158,6 +158,14 @@ class GuildVoiceSession {
       return;
     }
 
+    if (this.audioQueue.isPlaybackActive()) {
+      this.logger.info('Sprachcapture wird waehrend der Sound-Wiedergabe uebersprungen.', {
+        guildId: this.guildId,
+        userId
+      });
+      return;
+    }
+
     if (userId === this.clientUserId || this.activeCaptures.has(userId)) {
       return;
     }
@@ -207,6 +215,15 @@ class GuildVoiceSession {
       }
 
       if (!chunks.length || bufferLimitReached) {
+        return;
+      }
+
+      if (this.audioQueue.isPlaybackActive()) {
+        this.logger.info('Sprachausschnitt wird verworfen, weil waehrenddessen ein Sound abgespielt wurde.', {
+          bufferBytes: totalBytes,
+          guildId: this.guildId,
+          userId
+        });
         return;
       }
 

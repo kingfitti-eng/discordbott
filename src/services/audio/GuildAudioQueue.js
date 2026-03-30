@@ -153,6 +153,13 @@ class GuildAudioQueue {
     this.queue.length = 0;
   }
 
+  isPlaybackActive() {
+    return (
+      this.player.state.status === AudioPlayerStatus.Playing ||
+      this.player.state.status === AudioPlayerStatus.Buffering
+    );
+  }
+
   stop() {
     const hadAudio = this.queue.length > 0 || this.player.state.status !== AudioPlayerStatus.Idle;
     this.clear();

@@ -24,6 +24,49 @@ function collapseRepeatedCharacters(value) {
   return value.replace(/(.)\1+/g, '$1');
 }
 
+function getBoundedLevenshteinDistance(left, right, maxDistance) {
+  if (left === right) {
+    return 0;
+  }
+
+  if (!left || !right) {
+    return maxDistance + 1;
+  }
+
+  if (Math.abs(left.length - right.length) > maxDistance) {
+    return maxDistance + 1;
+  }
+
+  const previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let row = 1; row <= left.length; row += 1) {
+    let currentRow = [row];
+    let rowMin = currentRow[0];
+
+    for (let column = 1; column <= right.length; column += 1) {
+      const substitutionCost = left[row - 1] === right[column - 1] ? 0 : 1;
+      const value = Math.min(
+        previousRow[column] + 1,
+        currentRow[column - 1] + 1,
+        previousRow[column - 1] + substitutionCost
+      );
+
+      currentRow.push(value);
+      rowMin = Math.min(rowMin, value);
+    }
+
+    if (rowMin > maxDistance) {
+      return maxDistance + 1;
+    }
+
+    for (let index = 0; index < currentRow.length; index += 1) {
+      previousRow[index] = currentRow[index];
+    }
+  }
+
+  return previousRow[right.length];
+}
+
 function createGermanPhoneticKey(value) {
   let token = normalizeSpeechToken(value);
   if (!token) {
@@ -109,7 +152,8 @@ function isPhoneticEquivalent(transcriptToken, triggerToken) {
   return (
     transcriptToken.phonetic &&
     transcriptToken.phonetic === triggerToken.phonetic &&
-    transcriptToken.normalized[0] === triggerToken.normalized[0]
+    transcriptToken.normalized[0] === triggerToken.normalized[0] &&
+    getBoundedLevenshteinDistance(transcriptToken.normalized, triggerToken.normalized, 1) <= 1
   );
 }
 
@@ -157,6 +201,7 @@ module.exports = {
   createGermanPhoneticKey,
   escapeRegex,
   getTriggerMatchIndex,
+  getBoundedLevenshteinDistance,
   normalizeTranscript,
   normalizeSpeechToken,
   normalizeTriggerName,
