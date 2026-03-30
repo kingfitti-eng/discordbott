@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
+const { transcodeToPlaybackWav } = require('./audioNormalization');
 const { ensureDir } = require('./filesystem');
 const { validateAttachmentMetadata } = require('./fileValidation');
 const { sanitizeFileBaseName, sanitizePathSegment } = require('./sanitize');
@@ -34,17 +35,27 @@ async function storeAttachmentFile(options) {
 
   const safeTriggerName = sanitizePathSegment(triggerName).slice(0, 32);
   const safeBaseName = sanitizeFileBaseName(attachment.name || triggerName);
-  const fileName = `${Date.now()}-${safeTriggerName}-${safeBaseName}-${crypto.randomUUID()}${extension}`;
+  const sourceFileName = `${Date.now()}-${safeTriggerName}-${safeBaseName}-${crypto.randomUUID()}${extension}`;
+  const sourceFilePath = path.join(guildUploadDirectory, sourceFileName);
+  const fileName = `${Date.now()}-${safeTriggerName}-${safeBaseName}-${crypto.randomUUID()}.wav`;
   const filePath = path.join(guildUploadDirectory, fileName);
 
-  await fs.writeFile(filePath, fileBuffer);
+  await fs.writeFile(sourceFilePath, fileBuffer);
+
+  try {
+    await transcodeToPlaybackWav(sourceFilePath, filePath);
+  } finally {
+    await fs.unlink(sourceFilePath).catch(() => {});
+  }
+
+  const storedFileStats = await fs.stat(filePath);
 
   return {
     fileName,
     filePath,
-    mimeType: attachment.contentType || null,
+    mimeType: 'audio/wav',
     originalFileName: attachment.name || null,
-    size: fileBuffer.length
+    size: storedFileStats.size
   };
 }
 

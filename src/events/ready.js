@@ -9,6 +9,10 @@ function createReadyHandler(context) {
       speechProvider: speechAvailability.provider,
       speechReason: speechAvailability.reason
     });
+
+    if (speechAvailability.enabled) {
+      void context.speechService.warmup();
+    }
   };
 }
 

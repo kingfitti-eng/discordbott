@@ -7,6 +7,7 @@ const { createInteractionCreateHandler } = require('./events/interactionCreate')
 const { createMessageCreateHandler } = require('./events/messageCreate');
 const { createReadyHandler } = require('./events/ready');
 const { createSpeechRecognitionService } = require('./services/speech/SpeechServiceFactory');
+const { createHealthServer } = require('./services/http/healthServer');
 const { JsonStorageAdapter } = require('./services/storage/JsonStorageAdapter');
 const { TriggerRepository } = require('./services/triggers/TriggerRepository');
 const { TriggerService } = require('./services/triggers/TriggerService');
@@ -33,6 +34,11 @@ async function bootstrap() {
     uploadsDir: config.storage.uploadsDir
   });
   const speechService = await createSpeechRecognitionService(config.speech, logger);
+  const healthServer = createHealthServer({
+    config: config.http,
+    logger,
+    speechService
+  });
   const voiceSessionManager = new VoiceSessionManager({
     captureSilenceMs: config.speech.captureSilenceMs,
     logger,
@@ -79,6 +85,7 @@ async function bootstrap() {
     client.removeAllListeners();
 
     await Promise.allSettled([
+      healthServer.stop(),
       voiceSessionManager.destroyAll(),
       speechService.close()
     ]);
@@ -95,6 +102,7 @@ async function bootstrap() {
   });
 
   await client.login(config.discord.token);
+  await healthServer.start();
 }
 
 bootstrap().catch((error) => {
